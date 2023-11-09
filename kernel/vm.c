@@ -5,7 +5,6 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
 /*
  * the kernel's page table.
  */
@@ -248,6 +247,38 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
   return newsz;
 }
 
+// Allocate PTEs and physical memory to grow process from oldsz to
+// newsz, which need not be page aligned.  Returns new size or 0 on error.
+uint64
+uvmalloc_thread(pagetable_t *pagetable_array, uint64 oldsz, uint64 newsz, int xperm, int num_pt)
+{
+  char *mem;
+  uint64 a;
+
+  if(newsz < oldsz)
+    return oldsz;
+
+  oldsz = PGROUNDUP(oldsz);
+  for(a = oldsz; a < newsz; a += PGSIZE){
+    mem = kalloc();
+    if(mem == 0){
+      for (int pt_iter = 0; pt_iter < num_pt; pt_iter++)
+        uvmdealloc(pagetable_array[pt_iter], a, oldsz);
+      return 0;
+    }
+    memset(mem, 0, PGSIZE);
+    for (int pt_iter = 0; pt_iter < num_pt; pt_iter++){
+      pagetable_t pagetable = pagetable_array[pt_iter];
+      if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R|PTE_U|xperm) != 0){
+        kfree(mem);
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+    }
+  }
+  return newsz;
+}
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -263,6 +294,23 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
   }
 
+  return newsz;
+}
+
+// process size.  Returns the new process size.
+uint64
+uvmdealloc_thread(pagetable_t *pagetable_array, uint64 oldsz, uint64 newsz, int num_pt)
+{
+  if(newsz >= oldsz)
+    return oldsz;
+
+  for (int pt_iter = 0; pt_iter < num_pt; pt_iter++){
+    pagetable_t pagetable = pagetable_array[pt_iter];
+    if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
+      int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
+      uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
+    }
+  }
   return newsz;
 }
 
@@ -323,6 +371,41 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
       kfree(mem);
       goto err;
+    }
+  }
+  return 0;
+
+ err:
+  uvmunmap(new, 0, i / PGSIZE, 1);
+  return -1;
+}
+
+int
+uvmcopy_threading(pagetable_t old, pagetable_t new, uint64 sz, uint64 sp)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+  char *mem;
+
+  for(i = 0; i < sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      panic("uvmcopy: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmcopy: page not present");
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+    if(i == PGROUNDDOWN(sp)){
+      if((mem = kalloc()) == 0)
+        goto err;
+
+      if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+        goto err;
+      }
+      continue;
+    }
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
+        goto err;
     }
   }
   return 0;

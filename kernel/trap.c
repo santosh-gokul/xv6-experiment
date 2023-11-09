@@ -56,6 +56,7 @@ usertrap(void)
     if(killed(p))
       exit(-1);
 
+    //printf("EPC: %d\n", p->trapframe->epc);
     // sepc points to the ecall instruction,
     // but we want to return to the next instruction.
     p->trapframe->epc += 4;
@@ -63,7 +64,6 @@ usertrap(void)
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
     intr_on();
-
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
@@ -126,6 +126,7 @@ usertrapret(void)
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
   uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
+  //printf("PID: %d", p->pid);
   ((void (*)(uint64))trampoline_userret)(satp);
 }
 

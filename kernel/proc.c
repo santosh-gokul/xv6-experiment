@@ -139,6 +139,7 @@ found:
     release(&p->lock);
     return 0;
   }
+  p->parent_thread = 0;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -148,6 +149,65 @@ found:
 
   return p;
 }
+
+// Look in the process table for an UNUSED proc.
+// If found, initialize state required to run in the kernel,
+// and return with p->lock held.
+// If there are no free procs, or a memory allocation fails, return 0.
+struct proc*
+allocprocthread(struct proc *parent_proc)
+{
+  struct proc * p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == UNUSED) {
+      goto found1;
+    } else {
+      release(&p->lock);
+    }
+  }
+  return 0;
+
+found1:
+  p->pid = allocpid();
+  p->state = USED;
+
+  // Allocate a trapframe page.
+  if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // An empty user page table.
+   p->pagetable = proc_pagetable(p);
+   p->sz = parent_proc->sz;
+   if(uvmcopy_threading(parent_proc->pagetable, p->pagetable, parent_proc->sz, parent_proc->trapframe->sp) < 0){
+    freeproc(p);
+    release(&p->lock);
+  }
+
+
+  /* if(uvmalloc(p->pagetable, p->sz, p->sz + 2*PGSIZE, PTE_W) == 0) */
+  /*   panic("Can't allocate stack for new thread\n"); */
+
+
+  /* uvmclear(p->pagetable, p->sz-2*PGSIZE); */
+  /* p->trapframe->sp = p->sz+PGSIZE; */
+
+  p->trapframe->sp = PGROUNDUP(parent_proc->trapframe->sp);
+  p->parent_thread = parent_proc;
+
+  // Set up new context to start executing at forkret,
+  // which returns to user space.
+  memset(&p->context, 0, sizeof(p->context));
+  p->context.ra = (uint64)forkret;
+  p->context.sp = p->kstack + PGSIZE;
+
+  return p;
+}
+
 
 // free a proc structure and the data hanging from it,
 // including user pages.
@@ -160,6 +220,24 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  p->pagetable = 0;
+  p->sz = 0;
+  p->pid = 0;
+  p->parent = 0;
+  p->name[0] = 0;
+  p->chan = 0;
+  p->killed = 0;
+  p->xstate = 0;
+  p->state = UNUSED;
+}
+
+void
+freeprocthread(struct proc *p){
+  if(p->trapframe)
+    kfree((void*)p->trapframe);
+  if(p->pagetable)
+    proc_freepagetable(p->pagetable, p->sz);
+  p->trapframe = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -262,16 +340,56 @@ growproc(int n)
   uint64 sz;
   struct proc *p = myproc();
 
-  sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
+  if(p->parent_thread == 0 && p->num_threads == 0){
+    sz = p->sz;
+    if(n > 0){
+      if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
+        return -1;
+      }
+    } else if(n < 0){
+      sz = uvmdealloc(p->pagetable, sz, sz + n);
     }
-  } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+    p->sz = sz;
+    return 0;
   }
-  p->sz = sz;
-  return 0;
+  else{
+    pagetable_t pt_array[NUMTHREADS+1];
+    int num_pt;
+    if(p->parent_thread == 0){
+      for (int child_iter = 1; child_iter<p->num_threads; child_iter++){
+        pt_array[child_iter] = p->child_threads[child_iter]->pagetable;
+      }
+      pt_array[0] = p->pagetable;
+      num_pt = p->num_threads;
+      sz = p->sz;
+    }else{
+      for (int child_iter = 1; child_iter<p->parent_thread->num_threads; child_iter++){
+        pt_array[child_iter] = p->parent_thread->child_threads[child_iter]->pagetable;
+      }
+      pt_array[0] = p->parent_thread->pagetable;
+      num_pt = p->parent_thread->num_threads;
+      sz = p->parent_thread->sz;
+    }
+    if(n > 0){
+      if((sz = uvmalloc_thread(&pt_array, sz, sz + n, PTE_W, num_pt)) == 0) {
+        return -1;
+      }
+    } else if(n < 0){
+      sz = uvmdealloc_thread(&pt_array, sz, sz + n, num_pt);
+    }
+    if(p->parent_thread == 0){
+      p->sz = sz;
+      for (int child_iter = 1; child_iter<p->num_threads; child_iter++){
+        p->child_threads[child_iter]->sz  = sz;
+      }
+    }else{
+      p->parent_thread->sz = sz;
+      for (int child_iter = 1; child_iter<p->parent_thread->num_threads; child_iter++){
+         p->parent_thread->child_threads[child_iter]->sz  = sz;
+      }
+    }
+    return 0;
+  }
 }
 
 // Create a new process, copying the parent.
@@ -460,8 +578,9 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        //printf("going to sched: %d", p->pid);
         swtch(&c->context, &p->context);
-
+        //printf("Done\n");
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -509,6 +628,14 @@ yield(void)
   release(&p->lock);
 }
 
+void thread_yield(void){
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->state = UNUSED;
+  sched();
+  release(&p->lock);
+}
+
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
 void
@@ -518,6 +645,7 @@ forkret(void)
 
   // Still holding p->lock from scheduler.
   release(&myproc()->lock);
+  //printf("PID: %d", myproc()->pid);
 
   if (first) {
     // File system initialization must be run in the context of a
@@ -526,7 +654,6 @@ forkret(void)
     first = 0;
     fsinit(ROOTDEV);
   }
-
   usertrapret();
 }
 

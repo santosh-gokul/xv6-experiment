@@ -20,3 +20,8 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+#define SYS_thread_init  22
+#define SYS_thread_create  23
+#define SYS_thread_destroy  24
+#define SYS_get_tid  25
+#define SYS_get_active_threads  26
