@@ -21,13 +21,13 @@ void start_func(void) {
   //heappages = sbrk(4096*1);
     uacquire(&data_lock);
     /* Start the thread here. */
-    printf("[.] started the thread function 1 (tid = %d) %d \n", get_tid());
+    printf("[.] started the thread function 1 (tid = %d)\n", get_tid());
     for (int i = 0; i < 100000000; i++);
 
     printf("In thread 1 function\n");
     //uacquire(&data_lock);
     heappages = sbrk(4096*1);
-    printf("After acquire in thread 1: %d\n", heappages);
+    printf("After acquire in thread 1\n");
     data = 200;
     for (int i = 0; i < 1; i++) {
         //printf("Val at i = %d :: From func 1\n", *a);
@@ -374,7 +374,7 @@ void thread_join() {
 int
 main(int argc, char *argv[])
 {
-    printf("Running Test 2\n");
+    printf("Running Test 3\n");
     //heappages = sbrk(4096*1);
 
     uinitlock(&data_lock, "data_lock");
