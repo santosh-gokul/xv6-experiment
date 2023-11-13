@@ -452,6 +452,8 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+  if(p->parent_thread!=0)
+    panic("Child thread exiting without calling thread_destroy(). Somethin's wrong.\n");
 
   if(p == initproc)
     panic("init exiting");

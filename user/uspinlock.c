@@ -24,7 +24,8 @@ void
 uacquire(struct uspinlock *lk)
 {
  if(holding(lk)){
-    panic_thread("PANIC: release");
+    panic_thread("panic: release");
+
   }
 
 
