@@ -1,13 +1,21 @@
-#include "user/uspinlock.h"
-#include <stdbool.h>
-#include <stddef.h>
+#include "uspinlock.h"
+#include <stdlib.h>
+#include <stdio.h>
+
+
+void
+panic_thread(char *s)
+{
+  fprintf(2, "%s\n", s);
+  exit(1);
+}
 
 void
 uinitlock(struct uspinlock *lk, char *name)
 {
   lk->name = name;
   lk->locked = 0;
-  lk->cpu = 0;
+  lk->tid = 0;
 }
 
 // Acquire the lock.
@@ -15,11 +23,9 @@ uinitlock(struct uspinlock *lk, char *name)
 void
 uacquire(struct uspinlock *lk)
 {
-  //push_off(); // disable interrupts to avoid deadlock.
- // if(holding(lk)){
-   //  printf("PANIC: release");
-   // exit(-1);
-  //}
+ if(holding(lk)){
+    panic_thread("PANIC: release");
+  }
 
 
   // On RISC-V, sync_lock_test_and_set turns into an atomic swap:
@@ -35,6 +41,7 @@ uacquire(struct uspinlock *lk)
   // On RISC-V, this emits a fence instruction.
   __sync_synchronize();
 
+  lk->tid = get_tid();
   // Record info about lock acquisition for holding() and debugging.
   //lk->cpu = mycpu();
 }
@@ -43,10 +50,11 @@ uacquire(struct uspinlock *lk)
 void
 urelease(struct uspinlock *lk)
 {
- // if(!holding(lk)){
-   // printf("PANIC: release\n");
-    //panic();
+ if(!holding(lk)){
+   panic_thread("release");
+ }
 
+  lk->tid = 0;
   // Tell the C compiler and the CPU to not move loads or stores
   // past this point, to ensure that all the stores in the critical
   // section are visible to other CPUs before the lock is released,
@@ -71,6 +79,6 @@ int
 holding(struct uspinlock *lk)
 {
   int r;
-  r = (lk->locked);
+  r = (lk->locked && lk->tid == get_tid());
   return r;
 }

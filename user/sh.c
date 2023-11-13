@@ -12,10 +12,13 @@
 #define BACK  5
 
 #define MAXARGS 10
+//struct uspinlock print_lock;
+
 
 struct cmd {
   int type;
 };
+
 
 struct execcmd {
   int type;
@@ -147,6 +150,7 @@ main(void)
 {
   static char buf[100];
   int fd;
+  //uinitlock(&print_lock, "print_lock");
 
   // Ensure that three file descriptors are open.
   while((fd = open("console", O_RDWR)) >= 0){

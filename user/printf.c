@@ -1,10 +1,12 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
-
 #include <stdarg.h>
+#include "user/uspinlock.h"
+//#include "kernel/spinlock.c"
 
 static char digits[] = "0123456789ABCDEF";
+struct uspinlock print_lock;
 
 static void
 putc(int fd, char c)
@@ -46,7 +48,6 @@ printptr(int fd, uint64 x) {
   for (i = 0; i < (sizeof(uint64) * 2); i++, x <<= 4)
     putc(fd, digits[x >> (sizeof(uint64) * 8 - 4)]);
 }
-
 // Print to the given fd. Only understands %d, %x, %p, %s.
 void
 vprintf(int fd, const char *fmt, va_list ap)
@@ -106,8 +107,9 @@ fprintf(int fd, const char *fmt, ...)
 void
 printf(const char *fmt, ...)
 {
+  uacquire(&print_lock, "print_lock");
   va_list ap;
-
   va_start(ap, fmt);
   vprintf(1, fmt, ap);
+  urelease(&print_lock, "print_lock");
 }

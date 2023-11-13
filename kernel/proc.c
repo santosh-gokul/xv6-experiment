@@ -140,6 +140,9 @@ found:
     return 0;
   }
   p->parent_thread = 0;
+  p->num_threads = 1;
+  p->num_threads_static = 1;
+  p->tid_within_p = 1;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -172,6 +175,8 @@ allocprocthread(struct proc *parent_proc)
 found1:
   p->pid = allocpid();
   p->state = USED;
+  p->sz = parent_proc->sz;
+  p->tid_within_p = parent_proc->num_threads_static;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -181,12 +186,28 @@ found1:
   }
 
   // An empty user page table.
-   p->pagetable = proc_pagetable(p);
-   p->sz = parent_proc->sz;
-   if(uvmcopy_threading(parent_proc->pagetable, p->pagetable, parent_proc->sz, parent_proc->trapframe->sp) < 0){
-    freeproc(p);
-    release(&p->lock);
+  p->pagetable = parent_proc->pagetable;
+  if(mappages(p->pagetable, TRAMPOLINE - p->tid_within_p*PGSIZE, PGSIZE,
+              (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
+    uvmunmap(p->pagetable, TRAMPOLINE, 1, 0);
+    uvmfree(p->pagetable, 0);
+    return 0;
   }
+
+  int sz = PGROUNDUP(p->sz);
+  uint64 sz1;
+  if((sz1 = uvmalloc(p->pagetable, sz, sz + 2*PGSIZE, PTE_W)) == 0)
+    panic("Error creating stack for new thread.");
+  sz = sz1; //Make sure to grow this size;
+  parent_proc->sz = sz;
+
+  uvmclear(p->pagetable, sz-2*PGSIZE);
+
+  /*  p->sz = parent_proc->sz; */
+  /*  if(uvmcopy_threading(parent_proc->pagetable, p->pagetable, parent_proc->sz, parent_proc->trapframe->sp) < 0){ */
+  /*   freeproc(p); */
+  /*   release(&p->lock); */
+  /* } */
 
 
   /* if(uvmalloc(p->pagetable, p->sz, p->sz + 2*PGSIZE, PTE_W) == 0) */
@@ -195,8 +216,8 @@ found1:
 
   /* uvmclear(p->pagetable, p->sz-2*PGSIZE); */
   /* p->trapframe->sp = p->sz+PGSIZE; */
-
-  p->trapframe->sp = PGROUNDUP(parent_proc->trapframe->sp);
+  p->sz = sz;
+  p->trapframe->sp = sz;
   p->parent_thread = parent_proc;
 
   // Set up new context to start executing at forkret,
@@ -235,8 +256,8 @@ void
 freeprocthread(struct proc *p){
   if(p->trapframe)
     kfree((void*)p->trapframe);
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
+
+  uvmunmap(p->pagetable, TRAMPOLINE - p->tid_within_p*PGSIZE, 1, 0);
   p->trapframe = 0;
   p->pagetable = 0;
   p->sz = 0;
@@ -288,8 +309,13 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+  struct proc* p = myproc();
+
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  for(int iter = 1; iter <= p->num_threads_static; iter++){
+    uvmunmap(pagetable, TRAMPOLINE - iter*PGSIZE, 1, 0);
+  }
+
   uvmfree(pagetable, sz);
 }
 
@@ -340,56 +366,17 @@ growproc(int n)
   uint64 sz;
   struct proc *p = myproc();
 
-  if(p->parent_thread == 0 && p->num_threads == 0){
-    sz = p->sz;
-    if(n > 0){
-      if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-        return -1;
-      }
-    } else if(n < 0){
-      sz = uvmdealloc(p->pagetable, sz, sz + n);
+  sz = p->sz;
+  if(n > 0){
+    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
+      return -1;
     }
-    p->sz = sz;
-    return 0;
+  } else if(n < 0){
+    sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
-  else{
-    pagetable_t pt_array[NUMTHREADS+1];
-    int num_pt;
-    if(p->parent_thread == 0){
-      for (int child_iter = 1; child_iter<p->num_threads; child_iter++){
-        pt_array[child_iter] = p->child_threads[child_iter]->pagetable;
-      }
-      pt_array[0] = p->pagetable;
-      num_pt = p->num_threads;
-      sz = p->sz;
-    }else{
-      for (int child_iter = 1; child_iter<p->parent_thread->num_threads; child_iter++){
-        pt_array[child_iter] = p->parent_thread->child_threads[child_iter]->pagetable;
-      }
-      pt_array[0] = p->parent_thread->pagetable;
-      num_pt = p->parent_thread->num_threads;
-      sz = p->parent_thread->sz;
-    }
-    if(n > 0){
-      if((sz = uvmalloc_thread(&pt_array, sz, sz + n, PTE_W, num_pt)) == 0) {
-        return -1;
-      }
-    } else if(n < 0){
-      sz = uvmdealloc_thread(&pt_array, sz, sz + n, num_pt);
-    }
-    if(p->parent_thread == 0){
-      p->sz = sz;
-      for (int child_iter = 1; child_iter<p->num_threads; child_iter++){
-        p->child_threads[child_iter]->sz  = sz;
-      }
-    }else{
-      p->parent_thread->sz = sz;
-      for (int child_iter = 1; child_iter<p->parent_thread->num_threads; child_iter++){
-         p->parent_thread->child_threads[child_iter]->sz  = sz;
-      }
-    }
-    return 0;
-  }
+  p->sz = sz;
+
+  return 0;
 }
 
 // Create a new process, copying the parent.
@@ -578,10 +565,9 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        //printf("going to sched: %d", p->pid);
+        p->context.s11 = p->tid_within_p*PGSIZE;
+        p->trapframe->s11 = p->tid_within_p*PGSIZE;
         swtch(&c->context, &p->context);
-        //printf("Done\n");
-        // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
       }

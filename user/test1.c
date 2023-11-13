@@ -8,7 +8,7 @@
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
 
-//#include "user/uspinlock.h"
+#include "user/uspinlock.h"
 //
 void* heappages;
 
@@ -88,6 +88,7 @@ main(int argc, char *argv[])
 {
     printf("Running Test 1\n");
     heappages = sbrk(4096*1);
+    //uinitlock(&data_lock, "data_lock");
     
     /* Initialize the user-level threading library */
     thread_init();

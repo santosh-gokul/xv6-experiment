@@ -85,8 +85,10 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
   int num_threads;
+  int num_threads_static;
+  int tid_within_p;
   struct proc *parent_thread;
-  struct proc *child_threads[NUMTHREADS];
+  //struct proc *child_threads[NUMTHREADS];
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state

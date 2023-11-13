@@ -40,11 +40,27 @@ sys_sbrk(void)
 {
   uint64 addr;
   int n;
+  struct proc* p = myproc();
 
   argint(0, &n);
-  addr = myproc()->sz;
+
+  if(p->parent_thread!=0){
+    acquire(&p->parent_thread->lock);
+    addr = p->parent_thread->sz;
+    p->sz = p->parent_thread->sz;
+  }
+  else{
+     addr = p->sz;
+  }
+
   if(growproc(n) < 0)
     return -1;
+  else{
+    if(p->parent_thread!=0){
+      p->parent_thread->sz = p->sz;
+      release(&p->parent_thread->lock);
+    }
+  }
   return addr;
 }
 
@@ -94,6 +110,7 @@ uint64
 sys_thread_init(void){
   struct proc *p = myproc();
   p->num_threads = 1;
+  p->num_threads_static = 1;
   return 0;
 }
 
@@ -107,11 +124,10 @@ sys_thread_create(void){
   uint64 arg_values[6];
   uint64 arg;
 
-  struct proc* pt = allocprocthread(p);
-
-  p->child_threads[p->num_threads] = pt;
   p->num_threads++;
-  pt->parent_thread = p;
+  p->num_threads_static++;
+  struct proc* pt = allocprocthread(p);
+  //p->child_threads[p->num_threads] = pt;
 
   pt->trapframe->epc = ra;
 
@@ -141,7 +157,10 @@ sys_thread_create(void){
 uint64
 sys_thread_destroy(void){
   struct proc *p = myproc();
+  acquire(&p->parent_thread->lock);
   p->parent_thread->num_threads--;
+  release(&p->parent_thread->lock);
+  freeprocthread(p);
   thread_yield();
   return 0;
 }
