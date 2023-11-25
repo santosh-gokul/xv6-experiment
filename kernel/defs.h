@@ -53,6 +53,7 @@ int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
+uint            bmap(struct inode *, uint);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -229,6 +230,14 @@ uint64          walkaddr_nk_impl(pagetable_t, uint64);
 int             copyout_nk(pagetable_t, uint64, char *, uint64);
 int             copyout_nk_impl(pagetable_t, uint64, char *, uint64);
 
+
+//NK_trap.c
+void            usertrapret_NK_impl(void);
+void            syscall_handler(void);
+
+//NK_fs.c
+int             readi_nk_impl(struct inode *, int, uint64, uint, uint);
+int             readi_nk(struct inode *, int, uint64, uint, uint);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

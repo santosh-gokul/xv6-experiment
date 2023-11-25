@@ -12,6 +12,7 @@ OBJS = \
 	$K/NK_proc.o \
 	$K/NK_exec.o \
 	$K/NK_vm.o \
+  $K/NK_fs.o \
   $K/console.o \
   $K/printf.o \
   $K/uart.o \

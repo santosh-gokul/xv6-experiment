@@ -9,16 +9,12 @@
 struct spinlock tickslock;
 uint ticks;
 
-extern char trampoline[], uservec[], userret[], trampoline_nk[];
+extern char trampoline[], uservec[], userret[];
 
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
 void okernelvec();
-void userret_NK(uint64);
-void uservec_NK();
-//void userret_NK();
 extern int devintr();
-//extern void userret_NK(uint64);
 
 void
 trapinit(void)
@@ -136,52 +132,6 @@ usertrapret(void)
   ((void (*)(uint64))trampoline_userret)(satp);
 }
 
-void usertrapret_NK_impl(void){
-  
-  /*
-  ** Before jumping to the user process, set prev mode to U mode.
-  ** Also, make sure M mode now accepts ecall from U mode.
-  ** Change the mtvec when U mode process is executing. and change the mtvec in usertrap
-  ** Stack we use the NK stack, so no problem.
-  ** Update the mepc, not sepc
-  ** Update the PMP configuration to allow complete permissions.
-   */
-
-  w_pmpcfg0(0x0F0F0F);
-  struct proc *p = myproc();
-
- //uint64 trampoline_userret = TRAMPOLINENK + (userret_NK - trampoline_nk);
-  //intr_off();
-
-  //uint64 trampoline_uservec = TRAMPOLINENK + (uservec_NK - trampoline_nk);
-  w_mtvec((uint64) uservec_NK);
-  p->trapframe->kernel_satp = r_satp();        // kernel page table
-  p->trapframe->kernel_trap = (uint64)okerneltrap;
-  p->trapframe->kernel_hartid = r_tp();
-  p->trapframe->kernel_sp = p->kstack + PGSIZE;
-
-
-  // set M Previous Privilege mode to User.
-  unsigned long x = r_mstatus();
-  x &= ~MSTATUS_MPP_MASK;
-  x |= MSTATUS_MPP_U;
-  w_mstatus(x);
-
-
-  w_mepc(p->trapframe->epc);
-  uint64 satp = MAKE_SATP(p->pagetable);
-  w_satp(satp);
-
-  w_mie(r_mie() | MIE_MTIE | MIE_ECS | MIE_ECU);
-  w_medeleg(0xfcff);
-  w_sscratch((uint64)p->trapframe);
-  userret_NK((uint64)p->trapframe);
-
-  //uint64 trampoline_userret = TRAMPOLINENK + (userret_NK - trampoline_nk);
-  //((void (*)(uint64))trampoline_userret)(satp);
-  //userret_NK();
-
-}
 // interrupts and exceptions from kernel code go here via kernelvec,
 // on whatever the current kernel stack is.
 void 
@@ -223,13 +173,6 @@ clockintr()
   release(&tickslock);
 }
 
-
-void syscall_handler(){
-    intr_on();
-    syscall();
-    asm volatile("li a7, 12");
-    asm volatile("ecall");
-};
 // check if it's an external interrupt or software interrupt,
 // and handle it.
 // returns 2 if timer interrupt,
@@ -279,16 +222,6 @@ devintr()
 
     return 2;
   }
-  else if(scause == 12){
-    struct proc* p = myproc();
-    p->trapframe->epc += 4;
-    intr_on();
-    syscall();
-    asm volatile("li a7, 12");
-    asm volatile("ecall");
-
-  }
-
   else {
     return 0;
   }
