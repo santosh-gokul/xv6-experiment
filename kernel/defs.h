@@ -64,6 +64,11 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 
+// NK_kalloc.c
+void*           kalloc_nk(void);
+void            kfree_nk(void *);
+void            kinit_nk(void);
+
 // log.c
 void            initlog(int, struct superblock*);
 void            log_write(struct buf*);
@@ -106,6 +111,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+void            forkret_NK(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -147,7 +153,7 @@ void            trapinit(void);
 void            trapinithart(void);
 extern struct spinlock tickslock;
 void            usertrapret(void);
-
+void            okerneltrap(void);
 // uart.c
 void            uartinit(void);
 void            uartintr(void);
@@ -184,6 +190,45 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
+
+
+//NK_proc.c
+void            yield_nk(void);
+void            sched_nk(void);
+pagetable_t     proc_pagetable_nk(struct proc *);
+pagetable_t     proc_pagetable_nk_impl(struct proc *);
+void            forkret_NK(void);
+void            forkret_NK_impl(void);
+void            usertrapret_NK(void);
+int             either_copyout_nk(int , uint64 , void *, uint64);
+int             either_copyout_nk_impl(int , uint64 , void *, uint64);
+
+
+
+//NK_exec.c
+
+void            exec_nk_impl(char *, char **);
+void            exec_nk(char *, char **);
+
+//NK_vm.c
+void            kvminit_nk(void);
+void            kvminithart_nk(void);
+void            kvmmap_nk(pagetable_t, uint64, uint64, uint64, int);
+int             mappages_nk(pagetable_t, uint64, uint64, uint64, int);
+pagetable_t     uvmcreate_nk(void);
+uint64          uvmalloc_nk(pagetable_t, uint64, uint64, int);
+uint64          uvmalloc_nk_impl(pagetable_t, uint64, uint64, int);
+//uint64          uvmdealloc(pagetable_t, uint64, uint64);
+//void            uvmfree(pagetable_t, uint64);
+//void            uvmunmap(pagetable_t, uint64, uint64, int);
+void            uvmclear_nk(pagetable_t, uint64);
+void            uvmclear_nk_impl(pagetable_t, uint64);
+pte_t *         walk_nk(pagetable_t, uint64, int);
+uint64          walkaddr_nk(pagetable_t, uint64);
+uint64          walkaddr_nk_impl(pagetable_t, uint64);
+int             copyout_nk(pagetable_t, uint64, char *, uint64);
+int             copyout_nk_impl(pagetable_t, uint64, char *, uint64);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

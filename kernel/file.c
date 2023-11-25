@@ -119,8 +119,13 @@ fileread(struct file *f, uint64 addr, int n)
     r = devsw[f->major].read(1, addr, n);
   } else if(f->type == FD_INODE){
     ilock(f->ip);
-    if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
-      f->off += r;
+    if(!strncmp(myproc()->name, "test_nk", 2)){
+      if((r = readi_nk(f->ip, 1, addr, f->off, n)) > 0)
+        f->off += r;
+    }else{
+      if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
+        f->off += r;
+    }
     iunlock(f->ip);
   } else {
     panic("fileread");
@@ -176,7 +181,6 @@ filewrite(struct file *f, uint64 addr, int n)
   } else {
     panic("filewrite");
   }
-
   return ret;
 }
 

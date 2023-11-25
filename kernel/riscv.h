@@ -25,6 +25,14 @@ r_mstatus()
   return x;
 }
 
+static inline uint64
+r_mscratch()
+{
+  uint64 x;
+  asm volatile("csrr %0, mscratch" : "=r" (x) );
+  return x;
+}
+
 static inline void 
 w_mstatus(uint64 x)
 {
@@ -40,6 +48,20 @@ w_mepc(uint64 x)
   asm volatile("csrw mepc, %0" : : "r" (x));
 }
 
+static inline uint64
+r_mepc(void)
+{
+  uint64 x;
+  asm volatile("csrr %0, mepc" : "=r" (x));
+  return x;
+}
+
+
+static inline void
+w_scause(long x)
+{
+  asm volatile("csrw scause, %0" : : "r" (x));
+}
 // Supervisor Status Register, sstatus
 
 #define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User
@@ -99,6 +121,8 @@ w_sie(uint64 x)
 #define MIE_MEIE (1L << 11) // external
 #define MIE_MTIE (1L << 7)  // timer
 #define MIE_MSIE (1L << 3)  // software
+#define MIE_ECS (1L << 9)
+#define MIE_ECU (1L << 8)
 static inline uint64
 r_mie()
 {
@@ -143,6 +167,12 @@ static inline void
 w_medeleg(uint64 x)
 {
   asm volatile("csrw medeleg, %0" : : "r" (x));
+}
+
+static inline void
+w_sscratch(uint64 x)
+{
+  asm volatile("csrw sscratch, %0" : : "r" (x));
 }
 
 // Machine Interrupt Delegation
@@ -196,6 +226,17 @@ w_pmpaddr0(uint64 x)
   asm volatile("csrw pmpaddr0, %0" : : "r" (x));
 }
 
+static inline void
+w_pmpaddr1(uint64 x)
+{
+  asm volatile("csrw pmpaddr1, %0" : : "r" (x));
+}
+static inline void
+w_pmpaddr2(uint64 x)
+{
+  asm volatile("csrw pmpaddr2, %0" : : "r" (x));
+}
+
 // use riscv's sv39 page table scheme.
 #define SATP_SV39 (8L << 60)
 
@@ -229,6 +270,15 @@ r_scause()
 {
   uint64 x;
   asm volatile("csrr %0, scause" : "=r" (x) );
+  return x;
+}
+
+// Supervisor Trap Cause
+static inline uint64
+r_mcause()
+{
+  uint64 x;
+  asm volatile("csrr %0, mcause" : "=r" (x) );
   return x;
 }
 
@@ -272,6 +322,14 @@ intr_on()
   w_sstatus(r_sstatus() | SSTATUS_SIE);
 }
 
+
+// enable device interrupts
+static inline void
+intr_on_m()
+{
+  w_mstatus(r_mstatus() | MSTATUS_MIE);
+}
+
 // disable device interrupts
 static inline void
 intr_off()
@@ -311,6 +369,14 @@ w_tp(uint64 x)
   asm volatile("mv tp, %0" : : "r" (x));
 }
 
+
+static inline void
+w_sp(uint64 x)
+{
+  asm volatile("mv sp, %0" : : "r" (x));
+}
+
+
 static inline uint64
 r_ra()
 {
@@ -318,6 +384,84 @@ r_ra()
   asm volatile("mv %0, ra" : "=r" (x) );
   return x;
 }
+
+static inline uint64
+r_a0()
+{
+  uint64 x;
+  asm volatile("mv %0, a0" : "=r" (x) );
+  return x;
+}
+static inline uint64
+r_a1()
+{
+  uint64 x;
+  asm volatile("mv %0, a1" : "=r" (x) );
+  return x;
+}
+
+static inline uint64
+r_a2()
+{
+  uint64 x;
+  asm volatile("mv %0, a2" : "=r" (x) );
+  return x;
+}
+
+static inline uint64
+r_a3()
+{
+  uint64 x;
+  asm volatile("mv %0, a3" : "=r" (x) );
+  return x;
+}
+static inline uint64
+r_a4()
+{
+  uint64 x;
+  asm volatile("mv %0, a4" : "=r" (x) );
+  return x;
+}
+
+static inline uint64
+r_pc()
+{
+  uint64 x;
+  asm volatile("mv %0, pc" : "=r" (x) );
+  return x;
+}
+
+
+static inline void
+w_a0(uint64 x)
+{
+  asm volatile("mv a0, %0" : : "r" (x));
+}
+static inline void
+w_a1(uint64 x)
+{
+  asm volatile("mv a1, %0" : : "r" (x));
+}
+
+static inline void
+w_a2(uint64 x)
+{
+  asm volatile("mv a2, %0" : : "r" (x));
+}
+
+static inline void
+w_a3(uint64 x)
+{
+  asm volatile("mv a3, %0" : : "r" (x));
+}
+
+static inline void
+w_a4(uint64 x)
+{
+  asm volatile("mv a4, %0" : : "r" (x));
+}
+
+
 
 // flush the TLB.
 static inline void

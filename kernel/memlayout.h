@@ -44,13 +44,15 @@
 // the kernel expects there to be RAM
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
-#define KERNBASE 0x80000000L
-#define PHYSTOP (KERNBASE + 128*1024*1024)
-
+#define NKBASE 0x80000000L
+#define KERNBASE 0x81000000L
+#define PHYSTOP (NKBASE + 128*1024*1024)
+#define NKSTOP 0x81000000L
 // map the trampoline page to the highest address,
 // in both user and kernel space.
-#define TRAMPOLINE (MAXVA - PGSIZE)
 
+#define TRAMPOLINENK (MAXVA - PGSIZE)
+#define TRAMPOLINE (TRAMPOLINENK - PGSIZE)
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
 #define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)

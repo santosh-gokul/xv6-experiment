@@ -19,7 +19,7 @@ extern void forkret(void);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
-
+extern char trampoline_nk[]; //NK_trampoline.S
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
 // memory model when using p->parent.
@@ -35,11 +35,11 @@ proc_mapstacks(pagetable_t kpgtbl)
   struct proc *p;
   
   for(p = proc; p < &proc[NPROC]; p++) {
-    char *pa = kalloc();
+    char *pa = kalloc(); //In unsafe region.
     if(pa == 0)
       panic("kalloc");
     uint64 va = KSTACK((int) (p - proc));
-    kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+    kvmmap_nk(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   }
 }
 
@@ -156,10 +156,13 @@ static void
 freeproc(struct proc *p)
 {
   if(p->trapframe)
-    kfree((void*)p->trapframe);
+    kfree((void*)p->trapframe); //Update this after shifting the trapframe to the protected space.
   p->trapframe = 0;
-  if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
+
+  if(strncmp(p->name, "test_nk", 2)){
+    if(p->pagetable)
+      proc_freepagetable(p->pagetable, p->sz); //Change this to a syscall to delete the pagetable.
+  }
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -187,7 +190,14 @@ proc_pagetable(struct proc *p)
   // at the highest user virtual address.
   // only the supervisor uses it, on the way
   // to/from user space, so not PTE_U.
-  if(mappages(pagetable, TRAMPOLINE, PGSIZE,
+
+    if(mappages(pagetable, TRAMPOLINENK, PGSIZE,
+              (uint64)trampoline_nk, PTE_R | PTE_X) < 0){
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+
+      if(mappages(pagetable, TRAMPOLINE, PGSIZE,
               (uint64)trampoline, PTE_R | PTE_X) < 0){
     uvmfree(pagetable, 0);
     return 0;
@@ -210,6 +220,7 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+  uvmunmap(pagetable, TRAMPOLINENK, 1, 0);
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
@@ -347,7 +358,6 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
-
   if(p == initproc)
     panic("init exiting");
 
@@ -379,6 +389,11 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
+
+  if(!strncmp("test_nk", p->name, 2)){
+    asm volatile("li a7, 13");
+    asm volatile("ecall");
+  }
 
   // Jump into the scheduler, never to return.
   sched();
@@ -428,7 +443,6 @@ wait(uint64 addr)
       release(&wait_lock);
       return -1;
     }
-    
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }

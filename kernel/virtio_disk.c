@@ -218,7 +218,6 @@ virtio_disk_rw(struct buf *b, int write)
   uint64 sector = b->blockno * (BSIZE / 512);
 
   acquire(&disk.vdisk_lock);
-
   // the spec's Section 5.2 says that legacy block operations use
   // three descriptors: one for type/reserved/sector, one for the
   // data, one for a 1-byte status result.
@@ -280,7 +279,6 @@ virtio_disk_rw(struct buf *b, int write)
 
   *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 0; // value is queue number
 
-  // Wait for virtio_disk_intr() to say request has finished.
   while(b->disk == 1) {
     sleep(b, &disk.vdisk_lock);
   }

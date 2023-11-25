@@ -16,6 +16,7 @@
 #include "file.h"
 #include "fcntl.h"
 
+extern char* shared_space;
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -31,6 +32,7 @@ argfd(int n, int *pfd, struct file **pf)
     *pfd = fd;
   if(pf)
     *pf = f;
+
   return 0;
 }
 
@@ -90,7 +92,6 @@ sys_write(void)
   argint(2, &n);
   if(argfd(0, 0, &f) < 0)
     return -1;
-
   return filewrite(f, p, n);
 }
 
@@ -311,8 +312,12 @@ sys_open(void)
   int n;
 
   argint(1, &omode);
-  if((n = argstr(0, path, MAXPATH)) < 0)
+  if(!strncmp(myproc()->name, "test_nk", 2)){
+    strncpy(path, &shared_space, MAXPATH);
+  }
+  else if((n = argstr(0, path, MAXPATH)) < 0){
     return -1;
+  }
 
   begin_op();
 
@@ -460,12 +465,20 @@ sys_exec(void)
     if(fetchstr(uarg, argv[i], PGSIZE) < 0)
       goto bad;
   }
+  int ret;
 
-  int ret = exec(path, argv);
+  if(!strncmp(path, "test_nk", 2)){
+    char *path_for_nk = kalloc();
+    memmove(path_for_nk, path, MAXPATH);
+    char **argv_for_nk = kalloc();
+    memmove(argv_for_nk, argv, MAXARG);
+
+    exec_nk_impl(path_for_nk, argv_for_nk);
+  }else
+    ret = exec(path, argv);
 
   for(i = 0; i < NELEM(argv) && argv[i] != 0; i++)
     kfree(argv[i]);
-
   return ret;
 
  bad:

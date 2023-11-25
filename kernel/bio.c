@@ -92,7 +92,7 @@ bget(uint dev, uint blockno)
 struct buf*
 bread(uint dev, uint blockno)
 {
-  struct buf *b;
+  struct buf *b = (struct buf*) kalloc();
 
   b = bget(dev, blockno);
   if(!b->valid) {

@@ -11,10 +11,9 @@
  */
 pagetable_t kernel_pagetable;
 
-extern char etext[];  // kernel.ld sets this to end of kernel code.
+extern char etext[];
 
 extern char trampoline[]; // trampoline.S
-
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -61,9 +60,9 @@ kvminit(void)
 void
 kvminithart()
 {
+  //printf("Hello]n");
   // wait for any previous writes to the page table memory to finish.
   sfence_vma();
-
   w_satp(MAKE_SATP(kernel_pagetable));
 
   // flush stale entries from the TLB.

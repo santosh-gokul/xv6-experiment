@@ -1,20 +1,22 @@
-#include "types.h"
-#include "param.h"
-#include "memlayout.h"
-#include "riscv.h"
-#include "defs.h"
+#include "kernel/types.h"
+#include "kernel/param.h"
+#include "kernel/memlayout.h"
+#include "kernel/riscv.h"
+#include "kernel/defs.h"
 
 void main();
 void timerinit();
+void okernelvec();
 
 // entry.S needs one stack per CPU.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
 // a scratch area per CPU for machine-mode timer interrupts.
-uint64 timer_scratch[NCPU][5];
+uint64 timer_scratch[NCPU][34];
 
 // assembly code in kernelvec.S for machine-mode timer interrupt.
 extern void timervec();
+char* shared_space;
 
 // entry.S jumps here in machine mode on stack0.
 void
@@ -26,6 +28,7 @@ start()
   x |= MSTATUS_MPP_S;
   w_mstatus(x);
 
+
   // set M Exception Program Counter to main, for mret.
   // requires gcc -mcmodel=medany
   w_mepc((uint64)main);
@@ -33,14 +36,8 @@ start()
   // disable paging for now.
   w_satp(0);
 
-  kinit_nk();         // physical page allocator
-  kvminit();       // create kernel page table
-  kvminithart();   // turn on paging
-
-  //printf("Val of end: %d", (uint64) end);
-
   // delegate all interrupts and exceptions to supervisor mode.
-  w_medeleg(0xffff);
+  w_medeleg(0xfdff);
   w_mideleg(0xffff);
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 
@@ -50,19 +47,35 @@ start()
   //w_pmpaddr0(0x3fffffffffffffull);
   //printf("End of text: %d", etext);
   //w_pmpaddr0(etext >> 2);
-  w_pmpaddr0(0x0000000088000000>>2);
-  w_pmpcfg0(0x0F);
-  //w_pmpcfg0(0xf);
+
+  w_pmpaddr0(0x0000000080000000>>2);
+  w_pmpaddr1(0x0000000081000000>>2);
+  w_pmpaddr2(0x0000000088000000>>2);
+  w_pmpcfg0(0x0F0D0F);
+
+  if(r_mhartid() == 0){
+  kinit(); //For unprotected region memory init.
+  kinit_nk();
+  shared_space = (char*) kalloc();
+  kvminit_nk();
+  kvminithart_nk();
+   }else{
+      __sync_synchronize();
+      kvminithart_nk();
+   }
 
   // ask for clock interrupts.
   timerinit();
+  w_mtvec((uint64)okernelvec);
 
   // keep each CPU's hartid in its tp register, for cpuid().
   int id = r_mhartid();
   w_tp(id);
 
-  // switch to supervisor mode and jump to main().
-  asm volatile("mret");
+
+  // switch to supervisor mode xband jump to main().
+  //w_sp((uint64)stack_ok + (r_tp() * 4096));
+  asm volatile("call _entry");
 }
 
 // arrange to receive timer interrupts.
@@ -85,16 +98,17 @@ timerinit()
   // scratch[3] : address of CLINT MTIMECMP register.
   // scratch[4] : desired interval (in cycles) between timer interrupts.
   uint64 *scratch = &timer_scratch[id][0];
-  scratch[3] = CLINT_MTIMECMP(id);
-  scratch[4] = interval;
+  scratch[31] = CLINT_MTIMECMP(id);
+  scratch[32] = interval;
   w_mscratch((uint64)scratch);
 
   // set the machine-mode trap handler.
-  w_mtvec((uint64)timervec);
+  //w_mtvec((uint64)timervec);
 
   // enable machine-mode interrupts.
   w_mstatus(r_mstatus() | MSTATUS_MIE);
 
   // enable machine-mode timer interrupts.
-  w_mie(r_mie() | MIE_MTIE);
+   w_mie(r_mie() | MIE_MTIE | MIE_ECS);
+
 }

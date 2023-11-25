@@ -27,6 +27,16 @@ memcmp(const void *v1, const void *v2, uint n)
   return 0;
 }
 
+
+int
+strcmp(const char *p, const char *q)
+{
+  while(*p && *p == *q)
+    p++, q++;
+  return (uchar)*p - (uchar)*q;
+}
+
+
 void*
 memmove(void *dst, const void *src, uint n)
 {
