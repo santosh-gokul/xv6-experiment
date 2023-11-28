@@ -29,10 +29,15 @@ okerneltrap()
 {
    uint64 mcause = r_mcause();
    w_pmpcfg0(0x0F0D0F);
+   w_mie(r_mie() & ~MIE_ECU);
+   w_medeleg(0xfdff);
+   
 
    //Timer interrupt from M mode.
    if(mcause ==  0x8000000000000007L){
-     if((r_mstatus() & ~MSTATUS_MPP_U) != 0)
+     unsigned long x = r_mstatus();
+     x &= ~MSTATUS_MPP_MASK;
+     if((x | MSTATUS_MPP_U) != r_mstatus())
        timervec();
      
      struct proc* p = myproc();
@@ -149,35 +154,86 @@ okerneltrap()
         usertrapret_NK_impl();
         okernelret();
      }
-     else if(a7 == 11){
-       printf("Done hereee\n");
-       struct proc* p = myproc();
-       w_mepc(p->m_to_s);
-       okernelret();
-     }
+     /* else if(a7 == 11){ */
+     /*   printf("Done hereee\n"); */
+     /*   struct proc* p = myproc(); */
+     /*   w_mepc(p->m_to_s); */
+     /*   okernelret(); */
+     /* } */
      else if(a7 == 12){
-       struct proc *p = myproc();
-        w_mtvec((uint64) uservec_NK);
-        w_mepc(p->trapframe->epc);
-        unsigned long x = r_mstatus();
-        x &= ~MSTATUS_MPP_MASK;
-        x |= MSTATUS_MPP_U;
-        w_mstatus(x);
-        uint64 satp = MAKE_SATP(p->pagetable);
-        w_satp(satp);
-        w_pmpcfg0(0x0F0F0F);
-        userret_NK(p->trapframe);
+       usertrapret_NK_impl();
+       /* struct proc *p = myproc(); */
+       /* w_mtvec((uint64) uservec_NK); */
+       /* w_mepc(p->trapframe->epc); */
+       /* unsigned long x = r_mstatus(); */
+       /* x &= ~MSTATUS_MPP_MASK; */
+       /* x |= MSTATUS_MPP_U; */
+       /* w_mstatus(x); */
+       /* uint64 satp = MAKE_SATP(p->pagetable); */
+       /* w_satp(satp); */
+       /* w_pmpcfg0(0x0F0F0F); */
+       /* userret_NK(p->trapframe); */
      }
      else if(a7 == 13){
-       w_mie(r_mie() & ~MIE_ECU);
-       w_medeleg(0xfdff);
        w_mepc((uint64) sched);
        okernelret();
-       
-       
      }
+     else if(a7 == 14){
+       //scratch[9] = insert_trapframe(a0, a1, a2, a3);
+       goto ret;
+     }
+     else if(a7 == 15){
+       init_protected_proc_impl(a0);
+       goto ret;
+     }
+     else if(a7 == 16){
+       freeproc_nk_impl(a0);
+       goto ret;
+     }
+     else if(a7 == 17){
+       reparent_nk_impl(a0);
+       goto ret;
+     }
+     else if(a7 == 18){
+       exit_nk_impl(a0);
+     }
+     else if(a7 == 19){
+       acquire_nk_impl(a0);
+       goto ret;
+     }
+    else if(a7 == 20){
+       release_nk_impl(a0);
+       goto ret;
+     }
+    else if(a7 == 21){
+      set_protected_proc_state_impl(a0, a1);
+      goto ret;
+    }
+    else if(a7 == 22){
+      set_protected_proc_channel_impl(a0, a1);
+      goto ret;
+    }
+    else if(a7 == 24){
+       set_protected_proc_sz_impl(a0, a1);
+      goto ret;
+    }
+    else if(a7 == 23){
+       set_protected_proc_pagetable_impl(a0, a1);
+      goto ret;
+    }
+    else if(a7 == 25){
+      set_protected_proc_ofile_impl(a0, a1, a2);
+      goto ret;
+    }
+    else if(a7 == 26){
+      swtch_nk(a0, a1);
+    }
+    else if(a7 == 27){
+      set_protected_proc_trapframe_impl(a0, a1, a2);
+      goto ret;
+    }
+   
    }
-
  ret:
    w_mepc(r_mepc()+4);
    okernelret();
@@ -194,7 +250,6 @@ void syscall_handler(){
 
 
 void usertrapret_NK_impl(void){
-  
   /*
   ** Before jumping to the user process, set prev mode to U mode.
   ** Also, make sure M mode now accepts ecall from U mode.

@@ -203,7 +203,17 @@ void            forkret_NK_impl(void);
 void            usertrapret_NK(void);
 int             either_copyout_nk(int , uint64 , void *, uint64);
 int             either_copyout_nk_impl(int , uint64 , void *, uint64);
-
+void            freeproc_nk(struct proc*);
+void            freeproc_nk_impl(struct proc*);
+void            reparent_nk(struct proc* p);
+void            reparent_nk_impl(struct proc* p);
+void            set_protected_proc_state(struct proc*, enum procstate);
+void            set_protected_proc_channel(struct proc*, void *);
+void            set_protected_proc_sz(struct proc* , uint64 );
+void            set_protected_proc_pagetable(struct proc* , pagetable_t);
+void            set_protected_proc_ofile(struct proc*, int, struct file *);
+void            swtch_nk_call(struct context *, struct context *);
+void            set_protected_proc_trapframe(struct proc*, uint64, uint64);
 
 
 //NK_exec.c
@@ -220,8 +230,8 @@ pagetable_t     uvmcreate_nk(void);
 uint64          uvmalloc_nk(pagetable_t, uint64, uint64, int);
 uint64          uvmalloc_nk_impl(pagetable_t, uint64, uint64, int);
 //uint64          uvmdealloc(pagetable_t, uint64, uint64);
-//void            uvmfree(pagetable_t, uint64);
-//void            uvmunmap(pagetable_t, uint64, uint64, int);
+void            uvmfree_nk_impl(pagetable_t, uint64);
+void            uvmunmap_nk_impl(pagetable_t, uint64, uint64, int);
 void            uvmclear_nk(pagetable_t, uint64);
 void            uvmclear_nk_impl(pagetable_t, uint64);
 pte_t *         walk_nk(pagetable_t, uint64, int);
@@ -229,15 +239,19 @@ uint64          walkaddr_nk(pagetable_t, uint64);
 uint64          walkaddr_nk_impl(pagetable_t, uint64);
 int             copyout_nk(pagetable_t, uint64, char *, uint64);
 int             copyout_nk_impl(pagetable_t, uint64, char *, uint64);
-
+void            proc_freepagetable_nk_impl(pagetable_t, uint64);
 
 //NK_trap.c
 void            usertrapret_NK_impl(void);
 void            syscall_handler(void);
+void            init_protected_proc(struct proc*);
 
 //NK_fs.c
 int             readi_nk_impl(struct inode *, int, uint64, uint, uint);
 int             readi_nk(struct inode *, int, uint64, uint, uint);
 
+//NK_spinlock.c
+void            acquire_nk(struct spinlock *);
+void            release_nk(struct spinlock *);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

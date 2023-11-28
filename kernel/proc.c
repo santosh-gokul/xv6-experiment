@@ -17,6 +17,7 @@ struct spinlock pid_lock;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
+extern struct proc* protected_proc;
 
 extern char trampoline[]; // trampoline.S
 extern char trampoline_nk[]; //NK_trampoline.S
@@ -155,6 +156,8 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  //if(!strncmp(p->name, "test_nk", 2))
+    //freeproc_nk(p);
   if(p->trapframe)
     kfree((void*)p->trapframe); //Update this after shifting the trapframe to the protected space.
   p->trapframe = 0;
@@ -342,11 +345,15 @@ void
 reparent(struct proc *p)
 {
   struct proc *pp;
-
-  for(pp = proc; pp < &proc[NPROC]; pp++){
-    if(pp->parent == p){
-      pp->parent = initproc;
-      wakeup(initproc);
+  if(!strncmp(p->name, "test_nk", 2)){
+    reparent_nk(p);
+  }
+  else{
+    for(pp = proc; pp < &proc[NPROC]; pp++){
+      if(pp->parent == p){
+        pp->parent = initproc;
+        wakeup(initproc);
+      }
     }
   }
 }
@@ -365,40 +372,62 @@ exit(int status)
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
       struct file *f = p->ofile[fd];
-      fileclose(f);
-      p->ofile[fd] = 0;
+      //fileclose(f);
+      if(!strncmp(p->name, "test_nk", 2))
+        set_protected_proc_ofile(p, fd, 0);
+      else
+        p->ofile[fd] = 0;
     }
   }
 
-  begin_op();
-  iput(p->cwd);
-  end_op();
-  p->cwd = 0;
+  /* if(!strncmp(p->name, "test_nk", 2)){ */
+  /*   printf("Exiting process\n"); */
+  /*   exit_nk(p); */
+  /* } */
 
-  acquire(&wait_lock);
+    begin_op();
+    iput(p->cwd);
+    end_op();
+    //p->cwd = 0;
 
-  // Give any children to init.
-  reparent(p);
+    acquire(&wait_lock);
 
-  // Parent might be sleeping in wait().
-  wakeup(p->parent);
-  
-  acquire(&p->lock);
+    // Give any children to init.
+    if(!strncmp(p->name, "test_nk", 2))
+      reparent_nk(p);
+    else
+      reparent(p);
 
-  p->xstate = status;
-  p->state = ZOMBIE;
+    // Parent might be sleeping in wait().
+    wakeup(p->parent);
 
-  release(&wait_lock);
+    if(!strncmp(p->name, "test_nk", 2))
+      acquire_nk(&p->lock);
+    else
+       acquire(&p->lock);
 
-  if(!strncmp("test_nk", p->name, 2)){
-    asm volatile("li a7, 13");
-    asm volatile("ecall");
+    if(!strncmp(p->name, "test_nk", 2)){
+      set_protected_proc_state(p, ZOMBIE);
+
+    }else{
+      p->xstate = status;
+      p->state = ZOMBIE;
+    }
+
+    release(&wait_lock);
+
+    if(!strncmp("test_nk", p->name, 2)){
+      asm volatile("li a7, 13");
+      asm volatile("ecall");
+
+    }else{
+
+      // Jump into the scheduler, never to return.
+      sched();
+      panic("zombiee exit");
   }
-
-  // Jump into the scheduler, never to return.
-  sched();
-  panic("zombie exit");
 }
+
 
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
@@ -406,6 +435,7 @@ int
 wait(uint64 addr)
 {
   struct proc *pp;
+  struct proc *temp;
   int havekids, pid;
   struct proc *p = myproc();
 
@@ -416,25 +446,47 @@ wait(uint64 addr)
     havekids = 0;
     for(pp = proc; pp < &proc[NPROC]; pp++){
       if(pp->parent == p){
+        if(!strncmp(pp->name, "test_nk", 2))
+          temp = protected_proc;
+        else {
+          temp = pp;
+        }
         // make sure the child isn't still in exit() or swtch().
-        acquire(&pp->lock);
+        if(!strncmp(temp->name, "test_nk", 2))
+          acquire_nk(&temp->lock);
+        else
+          acquire(&temp->lock);
 
         havekids = 1;
-        if(pp->state == ZOMBIE){
+        if(temp->state == ZOMBIE){
           // Found one.
-          pid = pp->pid;
-          if(addr != 0 && copyout(p->pagetable, addr, (char *)&pp->xstate,
-                                  sizeof(pp->xstate)) < 0) {
-            release(&pp->lock);
+          pid = temp->pid;
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&temp->xstate,
+                                  sizeof(temp->xstate)) < 0) {
+            if(!strncmp(temp->name, "test_nk", 2))
+              release_nk(&temp->lock);
+            else
+              release(&temp->lock);
             release(&wait_lock);
             return -1;
           }
-          freeproc(pp);
-          release(&pp->lock);
+          if(!strncmp(temp->name, "test_nk", 2)){
+            freeproc_nk(temp);
+            release_nk(&temp->lock);
+          }
+          else{
+              freeproc(temp);
+              release(&temp->lock);
+          }
           release(&wait_lock);
+          strncpy(pp->name,"dead", 4);
+
           return pid;
         }
-        release(&pp->lock);
+        if(!strncmp(temp->name, "test_nk", 2))
+            release_nk(&temp->lock);
+        else
+          release(&temp->lock);
       }
     }
 
@@ -459,6 +511,7 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc* temp;
   struct cpu *c = mycpu();
   
   c->proc = 0;
@@ -467,20 +520,39 @@ scheduler(void)
     intr_on();
 
     for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
+      if(!strncmp(p->name, "test_nk", 2)){
+          acquire_nk(&protected_proc->lock);
+          temp = protected_proc;
+      }
+      else{
+          acquire(&p->lock);
+          temp = p;
+      }
+
+      if(temp->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        if(!strncmp(temp->name, "test_nk", 2)){
+          set_protected_proc_state(protected_proc, RUNNING);
+          c->proc = temp;
+          swtch(&c->context, &temp->context);
+        }
+        else{
+          temp->state = RUNNING;
+          c->proc = temp;
+          swtch(&c->context, &temp->context);
+        }
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
       }
-      release(&p->lock);
+      if(!strncmp(temp->name, "test_nk", 2)){
+        release_nk(&protected_proc->lock);
+      }
+      else
+        release(&temp->lock);
     }
   }
 }
@@ -508,7 +580,16 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+  if(!strncmp(p->name, "test_nk", 2)){
+    asm volatile("li a7, 26");
+    w_a0((uint64)&p->context);
+    w_a1((uint64)&mycpu()->context);
+    asm volatile("ecall");
+  }
+  else{
+    if(strncmp(p->name, "test_nk", 2))
+      swtch(&p->context, &mycpu()->context);
+  }
   mycpu()->intena = intena;
 }
 
@@ -517,10 +598,20 @@ void
 yield(void)
 {
   struct proc *p = myproc();
-  acquire(&p->lock);
-  p->state = RUNNABLE;
+  if(!strncmp(p->name, "test_nk", 2)){
+    acquire_nk(&p->lock);
+    set_protected_proc_state(p, RUNNABLE);
+  }
+  else {
+    acquire(&p->lock);
+    p->state = RUNNABLE;
+  }
   sched();
-  release(&p->lock);
+  if(!strncmp(p->name, "test_nk", 2))
+    release_nk(&p->lock);
+  else {
+    release(&p->lock);
+  }
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -558,21 +649,34 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup locks p->lock),
   // so it's okay to release lk.
 
-  acquire(&p->lock);  //DOC: sleeplock1
+  if(!strncmp(p->name, "test_nk", 2)){
+    acquire_nk(&p->lock);
+  }
+  else
+    acquire(&p->lock);  //DOC: sleeplock1
+
   release(lk);
 
   // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
-
+  if(!strncmp(p->name, "test_nk", 2)){
+    set_protected_proc_channel(p, chan);
+    set_protected_proc_state(p, SLEEPING);
+  }else{
+    p->chan = chan;
+    p->state = SLEEPING;
+  }
   sched();
 
   // Tidy up.
-  p->chan = 0;
-
-  // Reacquire original lock.
-  release(&p->lock);
+  if(!strncmp(p->name, "test_nk", 2)){
+    set_protected_proc_channel(p, 0);
+    release_nk(&p->lock);
+  }else{
+    p->chan = 0;
+    release(&p->lock);
+  }
   acquire(lk);
+
 }
 
 // Wake up all processes sleeping on chan.
@@ -581,14 +685,30 @@ void
 wakeup(void *chan)
 {
   struct proc *p;
+  struct proc *temp;
 
   for(p = proc; p < &proc[NPROC]; p++) {
     if(p != myproc()){
-      acquire(&p->lock);
-      if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
+      if(!strncmp(p->name, "test_nk", 2)){
+        acquire_nk(&protected_proc->lock);
+        temp = protected_proc;
       }
-      release(&p->lock);
+      else{
+        acquire(&p->lock);
+        temp = p;
+      }
+
+      if(temp->state == SLEEPING && temp->chan == chan) {
+        if(!strncmp(temp->name, "test_nk", 2)){
+         set_protected_proc_state(protected_proc, RUNNABLE);
+        }
+        else
+          temp->state = RUNNABLE;
+      }
+      if(!strncmp(temp->name, "test_nk", 2))
+        release_nk(&protected_proc->lock);
+      else
+        release(&temp->lock);
     }
   }
 }

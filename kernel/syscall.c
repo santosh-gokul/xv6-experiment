@@ -138,7 +138,10 @@ syscall(void)
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
-    p->trapframe->a0 = syscalls[num]();
+    if(!strncmp(p->name, "test_nk", 2))
+      set_protected_proc_trapframe(p, 14,syscalls[num]() );
+    else
+      p->trapframe->a0 = syscalls[num]();
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

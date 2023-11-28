@@ -296,3 +296,74 @@ copyout_nk_impl(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   return 0;
 }
+
+
+
+// Remove npages of mappings starting from va. va must be
+// page-aligned. The mappings must exist.
+// Optionally free the physical memory.
+void
+uvmunmap_nk_impl(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+{
+  uint64 a;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("uvmunmap: not aligned");
+
+  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    if((pte = walk_nk(pagetable, a, 0)) == 0)
+      panic("uvmunmap: walk");
+    if((*pte & PTE_V) == 0)
+      panic("uvmunmap: not mapped");
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("uvmunmap: not a leaf");
+    if(do_free){
+      uint64 pa = PTE2PA(*pte);
+      kfree_nk((void*)pa);
+    }
+    *pte = 0;
+  }
+}
+
+// Recursively free page-table pages.
+// All leaf mappings must already have been removed.
+void
+freewalk_nk_impl(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      freewalk_nk_impl((pagetable_t)child);
+      pagetable[i] = 0;
+    } else if(pte & PTE_V){
+      panic("freewalk: leaf");
+    }
+  }
+  kfree_nk((void*)pagetable);
+}
+
+// Free user memory pages,
+// then free page-table pages.
+void
+uvmfree_nk_impl(pagetable_t pagetable, uint64 sz)
+{
+  if(sz > 0)
+    uvmunmap_nk_impl(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+  freewalk_nk_impl(pagetable);
+}
+
+
+// Free a process's page table, and free the
+// physical memory it refers to.
+void
+proc_freepagetable_nk_impl(pagetable_t pagetable, uint64 sz)
+{
+  uvmunmap_nk_impl(pagetable, TRAMPOLINENK, 1, 0);
+  uvmunmap_nk_impl(pagetable, TRAMPOLINE, 1, 0);
+  uvmunmap_nk_impl(pagetable, TRAPFRAME, 1, 0);
+  uvmfree_nk_impl(pagetable, sz);
+}

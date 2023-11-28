@@ -30,12 +30,15 @@ main(int argc, char *argv[])
     cat(0);
     exit(0);
   }
-
   argv[1] = "README";
   for(i = 1; i < argc; i++){
     if((fd = open(argv[i], 0)) < 0){
       fprintf(2, "cat: cannot open %s\n", argv[i]);
       exit(1);
+    }
+
+    printf("Introducing some delay..\n");
+    for(int timer = 0; timer<95000000; timer++){
     }
     cat(fd);
     close(fd);

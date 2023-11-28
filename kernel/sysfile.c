@@ -46,7 +46,11 @@ fdalloc(struct file *f)
 
   for(fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd] == 0){
-      p->ofile[fd] = f;
+      if(!strncmp(p->name, "test_nk", 2)){
+        set_protected_proc_ofile(p, fd, f);
+      }
+      else
+        p->ofile[fd] = f;
       return fd;
     }
   }
@@ -103,7 +107,10 @@ sys_close(void)
 
   if(argfd(0, &fd, &f) < 0)
     return -1;
-  myproc()->ofile[fd] = 0;
+  if(!strncmp(myproc()->name, "test_nk", 2))
+     set_protected_proc_ofile(myproc(), fd, f);
+   else
+     myproc()->ofile[fd] = 0;
   fileclose(f);
   return 0;
 }

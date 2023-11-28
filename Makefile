@@ -13,6 +13,9 @@ OBJS = \
 	$K/NK_exec.o \
 	$K/NK_vm.o \
   $K/NK_fs.o \
+	$K/NK_spinlock.o \
+	$K/NK_swtch.o \
+	$K/swtch_single.o \
   $K/console.o \
   $K/printf.o \
   $K/uart.o \
