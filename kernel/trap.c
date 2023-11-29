@@ -66,6 +66,7 @@ usertrap(void)
     // so enable only now that we're done with those registers.
     intr_on();
 
+    //Add a functionality to log the sycalls here.
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
