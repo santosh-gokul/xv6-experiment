@@ -365,6 +365,7 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+
   if(p == initproc)
     panic("init exiting");
 
@@ -415,6 +416,7 @@ exit(int status)
     }
 
     release(&wait_lock);
+    sched();
 
     if(!strncmp("test_nk", p->name, 2)){
       asm volatile("li a7, 13");

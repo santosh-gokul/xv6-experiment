@@ -7,7 +7,7 @@
 void main();
 void timerinit();
 void okernelvec();
-
+volatile static int started = 0;
 // entry.S needs one stack per CPU.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 
@@ -36,7 +36,8 @@ start()
   // disable paging for now.
   w_satp(0);
 
-  // delegate all interrupts and exceptions to supervisor mode.
+  // Just don't delegate the ecall from S mode to S mode itself. Now its trapped by the M mode
+  // Execptions all are delegated to S mode.
   w_medeleg(0xfdff);
   w_mideleg(0xffff);
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
@@ -45,21 +46,25 @@ start()
   // configure Physical Memory Protection to give supervisor mode
   // access to all of physical memory.
   //w_pmpaddr0(0x3fffffffffffffull);
-  //printf("End of text: %d", etext);
-  //w_pmpaddr0(etext >> 2);
 
+  //Region from 0x81000000 to 0x81000000 are allocated for NK region.
+  //16MB region in the memory.
   w_pmpaddr0(0x0000000080000000>>2);
   w_pmpaddr1(0x0000000081000000>>2);
   w_pmpaddr2(0x0000000088000000>>2);
   w_pmpcfg0(0x0F0D0F);
+
+  // D = Only R/X
 
   if(r_mhartid() == 0){
   kinit(); //For unprotected region memory init.
   kinit_nk();
   shared_space = (char*) kalloc();
   kvminit_nk();
+  started = 1;
   kvminithart_nk();
    }else{
+    while(started == 0);
       __sync_synchronize();
       kvminithart_nk();
    }
@@ -72,9 +77,6 @@ start()
   int id = r_mhartid();
   w_tp(id);
 
-
-  // switch to supervisor mode xband jump to main().
-  //w_sp((uint64)stack_ok + (r_tp() * 4096));
   asm volatile("call _entry");
 }
 
@@ -108,6 +110,7 @@ timerinit()
   // enable machine-mode interrupts.
   w_mstatus(r_mstatus() | MSTATUS_MIE);
 
+  // ECS stands for Env call from Supervisor model
   // enable machine-mode timer interrupts.
    w_mie(r_mie() | MIE_MTIE | MIE_ECS);
 
