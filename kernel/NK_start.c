@@ -63,6 +63,7 @@ start()
   kvminit_nk();
   started = 1;
   kvminithart_nk();
+  syscall_logs_init();
    }else{
     while(started == 0);
       __sync_synchronize();

@@ -15,6 +15,7 @@ OBJS = \
   $K/NK_fs.o \
 	$K/NK_spinlock.o \
 	$K/NK_swtch.o \
+	$K/NK_log.o \
 	$K/swtch_single.o \
   $K/console.o \
   $K/printf.o \
@@ -146,6 +147,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_test_nk\
+	$U/_audit_test\
 
 # swap disk
 swap.img:

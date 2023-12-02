@@ -7,6 +7,7 @@ struct proc;
 struct spinlock;
 struct sleeplock;
 struct stat;
+struct logging_params;
 struct superblock;
 
 // bio.c
@@ -253,5 +254,9 @@ int             readi_nk(struct inode *, int, uint64, uint, uint);
 //NK_spinlock.c
 void            acquire_nk(struct spinlock *);
 void            release_nk(struct spinlock *);
+
+//NK_log.c
+void            log_syscalls(struct logging_params *);
+void            fetch_syscall_logs(struct logging_params**);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

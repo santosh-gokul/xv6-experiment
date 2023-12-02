@@ -38,10 +38,12 @@ main(int argc, char *argv[])
     }
 
     printf("Introducing some delay..\n");
-    for(int timer = 0; timer<100000000; timer++){
+    for(int timer = 0; timer<10000000; timer++){
     }
     cat(fd);
     close(fd);
   }
+  //audit();
   exit(0);
+  //audit();
 }

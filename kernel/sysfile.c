@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "NK_log.h"
 
 extern char* shared_space;
 // Fetch the nth word-sized system call argument as a file descriptor
@@ -325,6 +326,17 @@ sys_open(void)
   else if((n = argstr(0, path, MAXPATH)) < 0){
     return -1;
   }
+  struct logging_params *logp = (struct logging_params*)kalloc();
+  logp->integer_params[0] = omode;
+  strncpy(logp->char_params[0], path, MAXPATH);
+  strncpy(logp->pname, myproc()->name, 16);
+  logp->param_type[0] = 's';
+  logp->param_type[1] = 'i';
+  logp->param_type[2] = 'm';
+  logp->param_count = 2;
+  logp->syscall_num = myproc()->trapframe->a7;
+  log_syscalls(logp);
+  kfree(logp);
 
   begin_op();
 
@@ -522,4 +534,36 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+void
+sys_audit(void)
+{
+  struct logging_params** ok_syscall_logs = (struct logging_params**) kalloc();
+  fetch_syscall_logs(ok_syscall_logs);
+  int log_count = r_a0();
+  int ic_count=0;
+  int s_count = 0;
+
+  for (int iter = 0; iter<log_count; iter++){
+    printf("proc-name: %s, ", ok_syscall_logs[iter]->pname);
+    printf("syscall-number: %d, ", ok_syscall_logs[iter]->syscall_num);
+    ic_count = 0;
+    s_count = 0;
+    for(int param_iter = 0; param_iter<ok_syscall_logs[iter]->param_count; param_iter++){
+      switch(ok_syscall_logs[iter]->param_type[param_iter]){
+        case 'i':
+          printf("Arg%d: %d, ", param_iter, ok_syscall_logs[iter]->integer_params[ic_count]);
+          ic_count++;
+          break;
+        case 's':
+          printf("Arg%d: %s, ", param_iter, ok_syscall_logs[iter]->char_params[s_count]);
+          s_count++;
+          break;
+      }
+    }
+    printf("\n");
+  }
+
+  kfree(ok_syscall_logs);
 }

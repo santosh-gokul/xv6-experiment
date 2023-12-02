@@ -232,6 +232,14 @@ okerneltrap()
       set_protected_proc_trapframe_impl(a0, a1, a2);
       goto ret;
     }
+    else if(a7 == 29){
+      log_syscalls_impl(a0);
+      goto ret;
+    }
+    else if(a7 == 30){
+      scratch[9] = fetch_syscall_logs_impl(a0);
+      goto ret;
+    }
    
    }
  ret:
