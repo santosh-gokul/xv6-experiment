@@ -6,7 +6,7 @@
 
 void main();
 void timerinit();
-void okernelvec();
+void nkernelvec();
 volatile static int started = 0;
 // entry.S needs one stack per CPU.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
@@ -72,7 +72,7 @@ start()
 
   // ask for clock interrupts.
   timerinit();
-  w_mtvec((uint64)okernelvec);
+  w_mtvec((uint64)nkernelvec);
 
   // keep each CPU's hartid in its tp register, for cpuid().
   int id = r_mhartid();

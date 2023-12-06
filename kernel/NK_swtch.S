@@ -72,4 +72,4 @@ swtch_nk:
 
         csrrw a2, mscratch, a2
         csrw mepc, ra
-        j okernelret
+        j nkernelret

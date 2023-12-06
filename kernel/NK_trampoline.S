@@ -17,8 +17,8 @@
 .globl trampoline_nk
 trampoline_nk:
 .align 4
-.globl okernelvec
-okernelvec:
+.globl nkernelvec
+nkernelvec:
 	#
         # nk_trap.c sets mtvec to point here, so
         # traps from okernel space start here,
@@ -26,7 +26,7 @@ okernelvec:
         # same page table.
         #
 
-        # jump to okerneltrap(), which does not return
+        # jump to nkerneltrap(), which does not return
 
 
         csrrw a0, mscratch, a0
@@ -75,7 +75,7 @@ okernelvec:
         mul a0, a0, a1
         add sp, sp, a0
 
-        j okerneltrap
+        j nkerneltrap
 
 .globl uservec_NK
 uservec_NK:
@@ -210,10 +210,10 @@ userret_NK:
         mret
 
 
-.globl okernelret
-okernelret:
-        # okernelret(pagetable)
-        # called by okerneltrapret() in NK_trap.c to
+.globl nkernelret
+nkernelret:
+        # nkernelret(pagetable)
+        # called by nkerneltrapret() in NK_trap.c to
         # switch from nkernel to S mode.
 
         csrrw a0, mscratch, a0
@@ -254,7 +254,7 @@ okernelret:
         csrrw s11, mscratch, s11
 
         # return to S mode and kernel pc.
-        # okerneltrapret() set up mstatus and mepc.
+        # nkerneltrapret() set up mstatus and mepc.
         mret
 
 .globl timervec
@@ -280,10 +280,10 @@ timervec:
         csrw sip, a1
         csrrw a0, mscratch, a0
 
-        j okernelret
+        j nkernelret
 
 .globl external_intr
 external_intr:
         li a1, 512
         csrw sip, a1
-        j okernelret
+        j nkernelret
