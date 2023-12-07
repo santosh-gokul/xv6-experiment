@@ -492,7 +492,7 @@ sys_exec(void)
     char **argv_for_nk = kalloc();
     memmove(argv_for_nk, argv, MAXARG);
 
-    exec_nk_impl(path_for_nk, argv_for_nk);
+    exec_nk(path_for_nk, argv_for_nk);
   }else
     ret = exec(path, argv);
 

@@ -13,13 +13,6 @@ struct proc *protected_proc;
 
 
 void exec_nk(char *path, char **argv){
-  asm volatile("li a7, 8");
-  w_a0((uint64)path);
-  w_a1((uint64)argv);
-  asm volatile("ecall");
-}
-
-void exec_nk_impl(char *path, char **argv){
   char *s, *last;
   int i, off;
   uint64 argc, sz = 0, sp, ustack_temp[MAXARG], stackbase;

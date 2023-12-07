@@ -68,7 +68,7 @@ nkernelvec:
         csrrw s11, mscratch, s11
 
 
-        la sp, stack0
+        la sp, stack_nk
         li a0, 1024*4
         csrr a1, mhartid
         addi a1, a1, 1
@@ -132,7 +132,7 @@ uservec_NK:
         sd a0, 112(t2)
 
 
-        la sp, stack0
+        la sp, stack_nk
         li a0, 1024*4
         csrr a1, mhartid
         addi a1, a1, 1

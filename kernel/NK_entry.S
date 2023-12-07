@@ -6,10 +6,10 @@
 .global _entry_nk
 _entry_nk:
         # set up a stack for C.
-        # stack0 is declared in start.c,
+        # stack_nk is declared in NK_start.c,
         # with a 4096-byte stack per CPU.
-        # sp = stack0 + (hartid * 4096)
-        la sp, stack0
+        # sp = stack_nk + (hartid * 4096)
+        la sp, stack_nk
         li a0, 1024*4
         csrr a1, mhartid
         addi a1, a1, 1

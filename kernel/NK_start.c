@@ -9,10 +9,10 @@ void timerinit();
 void nkernelvec();
 volatile static int started = 0;
 // entry.S needs one stack per CPU.
-__attribute__ ((aligned (16))) char stack0[4096 * NCPU];
+__attribute__ ((aligned (16))) char stack_nk[4096 * NCPU];
 
 // a scratch area per CPU for machine-mode timer interrupts.
-uint64 timer_scratch[NCPU][34];
+uint64 scratch_region[NCPU][34];
 
 // assembly code in kernelvec.S for machine-mode timer interrupt.
 extern void timervec();
@@ -100,7 +100,7 @@ timerinit()
   // scratch[0..2] : space for timervec to save registers.
   // scratch[3] : address of CLINT MTIMECMP register.
   // scratch[4] : desired interval (in cycles) between timer interrupts.
-  uint64 *scratch = &timer_scratch[id][0];
+  uint64 *scratch = &scratch_region[id][0];
   scratch[31] = CLINT_MTIMECMP(id);
   scratch[32] = interval;
   w_mscratch((uint64)scratch);

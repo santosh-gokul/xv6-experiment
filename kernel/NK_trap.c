@@ -114,12 +114,6 @@ nkerneltrap()
        uvmclear_nk_impl(a0, a1);
        goto ret;
      }
-     else if(a7 == 8){
-       char *path = a0;
-       char **argv = a1;
-       exec_nk_impl(path, argv);
-       goto ret;
-     }
      else if(a7 == 9){
        forkret_NK_impl();
      }
