@@ -22,28 +22,20 @@ cat(int fd)
 }
 
 int
-main(int argc, char *argv[])
+main()
 {
   int fd, i;
 
-  if(argc <= 1){
-    cat(0);
-    exit(0);
+  char *filename = "README";
+  if((fd = open(filename, 0)) < 0){
+    fprintf(2, "cat: cannot open %s\n", filename);
+    exit(1);
   }
-  argv[1] = "README";
-  for(i = 1; i < argc; i++){
-    if((fd = open(argv[i], 0)) < 0){
-      fprintf(2, "cat: cannot open %s\n", argv[i]);
-      exit(1);
-    }
 
-    printf("Introducing some delay..\n");
-    for(int timer = 0; timer<10000000; timer++){
-    }
-    cat(fd);
-    close(fd);
+  printf("Introducing some delay..\n");
+  for(int timer = 0; timer<10000000; timer++){
   }
-  //audit();
+  cat(fd);
+  close(fd);
   exit(0);
-  //audit();
 }
